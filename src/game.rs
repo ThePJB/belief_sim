@@ -113,6 +113,8 @@ impl Game {
                     let p = mat4_multiply(&s, &t);
                     let flipy = [1.0f32, 0., 0., 0., 0., -1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.,];
                     let p = mat4_multiply(&flipy, &p);
+                    // let zoom_out = [0.85, 0., 0., 0., 0., 0.85, 0., 0., 0., 0., 1.0, 0., 0., 0., 0., 1.];
+                    // let p = mat4_multiply(&zoom_out, &p);
                     // let p = [1.0f32, 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.,];
                     self.prog.set_proj(&p, &self.gl);
                     self.h.render(&self.gl);

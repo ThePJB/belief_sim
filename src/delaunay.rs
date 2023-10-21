@@ -4,6 +4,142 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::collections::HashSet;
 
+fn orient(a: Vec2, b: Vec2, p: Vec2) -> bool {
+    let ab = b - a;
+    let ap = p - a;
+    ab.x * ap.y - ab.y * ap.x < 0.0
+}
+// nb its for a certain winding order, flip sign in orient for the other one. or see if all same
+fn point_in_polygon(verts: &[Vec2], p: Vec2) -> bool {
+    for i in 1..verts.len() {
+        let a = verts[i-1];
+        let b = verts[i];
+        if !orient(a, b, p) {
+            return false
+        }
+    }
+    let a = verts[verts.len() - 1];
+    let b = verts[0];
+    if !orient(a, b, p) {
+        return false
+    }
+    return true;
+}
+fn segment_intersection(a1: Vec2, b1: Vec2, a2: Vec2, b2: Vec2) -> Option<Vec2> {
+
+    let s1 = b1 - a1;
+    let s2 = b2 - a2;
+
+    let s1_x = s1.x;
+    let s1_y = s1.y;
+    let s2_x = s2.x;
+    let s2_y = s2.y;
+
+    let det = s1_x * s2_y - s1_y * s2_x;
+
+    if det.abs() < 1e-9f32 { // Adjust EPSILON as needed
+        return None; // The segments are parallel or colinear, no intersection
+    }
+
+    let s = (-s1_y * (a1.x - a2.x) + s1_x * (a1.y - a2.y)) / (-s2_x * s1_y + s1_x * s2_y);
+    let t = (s2_x * (a1.y - a2.y) - s2_y * (a1.x - a2.x)) / (-s2_x * s1_y + s1_x * s2_y);
+
+    if s >= 0.0 && s <= 1.0 && t >= 0.0 && t <= 1.0 {
+        // Collision detected
+        let intersection = Vec2::new(a1.x + t * s1_x, a1.y + t * s1_y);
+        Some(intersection)
+    } else {
+        None // Segments do not intersect within their bounds
+    }
+}
+
+fn centroid(v: &[Vec2]) -> Vec2 {
+    let mut acc = v[0];
+            for i in 1..v.len() {
+                if v[i].x < 0.0 || v[i].x > 1.0 || v[i].y < 0.0 || v[i].y > 1.0 {
+                    continue;
+                }
+                acc += v[i];
+            }
+            acc / v.len() as f32
+}
+
+pub fn winding_order_sort(v: &mut Vec<Vec2>) {
+    let centroid = centroid(v);
+    v.sort_by_key(|v| {
+        let v = *v - centroid;
+        ordered_float::OrderedFloat(v.x.atan2(v.y))
+    });
+}
+
+fn clip_poly(verts: &[Vec2], min: Vec2, max: Vec2) -> Vec<Vec2> {
+    // all poly verts within aabb + all aabb verts within poly + all intersection points of poly and aabb, winding order sort
+    let mut clipped_verts = vec![];
+
+    for v in verts {
+        if v.x > min.x && v.x < max.x && v.y > min.y && v.y < max.y {
+            clipped_verts.push(*v);
+        }
+    }
+
+    let a = min;
+    let b = vec2(max.x, min.y);
+    let c = max;
+    let d = vec2(min.x, max.y);
+
+    for aabb_vert in [a, b, c, d] {
+        if point_in_polygon(verts, aabb_vert) {
+            clipped_verts.push(aabb_vert);
+        }
+    }
+
+    let aabb_edges = [(a,b), (b,c), (c,d), (d,a)];
+    for (a, b) in aabb_edges {
+        for i in 1..verts.len() {
+            let ap = verts[i-1];
+            let bp = verts[i];
+            if let Some(p) = segment_intersection(a, b, ap, bp) {
+                clipped_verts.push(p);
+            }
+        }
+        let ap = verts[verts.len() - 1];
+        let bp = verts[0];
+        if let Some(p) = segment_intersection(a, b, ap, bp) {
+            clipped_verts.push(p);
+        }
+    }
+    winding_order_sort(&mut clipped_verts);
+    clipped_verts
+}
+
+#[test]
+fn test_pip() {
+    let p = vec![vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.5, -1.0)];
+    assert!(point_in_polygon(&p, vec2(0.1, -0.1)));
+    assert!(!point_in_polygon(&p, vec2(1.1, -0.1)));
+}
+
+#[test]
+fn test_pip2() {
+    // let p = vec![vec2(0.5, 0.5), vec2(1.5, 0.5), vec2(1.5, 1.5), vec2(0.5, 1.5)];
+    let p = vec![vec2(0.5, 1.5), vec2(1.5, 1.5), vec2(1.5, 0.5), vec2(0.5, 0.5)];
+    assert!(point_in_polygon(&p, vec2(1.0, 1.0)));
+}
+
+#[test]
+fn test_clip_poly() {
+    // let v = vec![vec2(0.5, 0.5), vec2(1.5, 0.5), vec2(1.5, 1.5), vec2(0.5, 1.5)];
+    let v = vec![vec2(0.5, 1.5), vec2(1.5, 1.5), vec2(1.5, 0.5), vec2(0.5, 0.5)];
+    let clipped = clip_poly(&v, vec2(0.0, 0.0), vec2(1.0, 1.0));
+    assert_eq!(clipped, vec![vec2(0.5, 0.5), vec2(0.5, 1.0), vec2(1.0, 1.0), vec2(1.0, 0.5)]);
+}
+
+#[test]
+fn test_segment_segment() {
+    assert_eq!(segment_intersection(vec2(1.0, 0.0), vec2(1.0, 1.0), vec2(1.5, 0.5), vec2(0.5, 0.5)), Some(vec2(1.0, 0.5)));
+
+}
+
 fn det4(a: [[f32;4];4]) -> f32 {
     let s1=a[0][0]*(a[1][1]*(a[2][2]*a[3][3]-a[3][2]*a[2][3])-a[1][2]*(a[2][1]*a[3][3]-a[2][3]*a[3][1])+a[1][3]*(a[2][1]*a[3][2]-a[2][2]*a[3][1]));
     let s2=a[0][1]*(a[1][0]*(a[2][2]*a[3][3]-a[3][2]*a[2][3])-a[1][2]*(a[2][0]*a[3][3]-a[2][3]*a[3][0])+a[1][3]*(a[2][0]*a[3][2]-a[2][2]*a[3][0]));
@@ -74,6 +210,7 @@ impl Delaunay {
 
         vdg
     }
+
     pub fn add_site(&mut self, p: Vec2) {
         let mut bad_triangles = HashSet::new();
         let mut bad_edges = HashSet::new();
@@ -124,7 +261,13 @@ impl Delaunay {
                 let b = self.sites[t[1]];
                 let c = self.sites[t[2]];
                 circumcenter(a, b, c)
-        }).collect();
+            })
+            // .map(|v| {
+            //     vec2(v.x.max(0.0).min(1.0), v.y.max(0.0).min(1.0))
+            // })
+            // i see how this is retarded
+            // need to actually calculate intersections of the line segments ay bruh
+            .collect();
 
         let center = self.sites[i];
 
@@ -132,16 +275,13 @@ impl Delaunay {
             let v = *v - center;
             ordered_float::OrderedFloat(v.x.atan2(v.y))
         });
-        site_verts
+
+        clip_poly(&site_verts, vec2(0.0, 0.0), vec2(1.0, 1.0))
     }
 
     pub fn centroids(&self) -> Vec<Vec2> {
         (0..self.sites.len()).map(|i| self.site_voronoi_verts(i)).map(|svv| {
-            let mut acc = svv[0];
-            for i in 1..svv.len() {
-                acc += svv[i];
-            }
-            acc / svv.len() as f32
+            centroid(&svv)
         }).collect()
     }
 

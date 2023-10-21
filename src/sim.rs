@@ -48,7 +48,7 @@ impl Sim {
         let h_seed = rng.next_u32();
 
         let mut diagram = Delaunay::new();
-        for i in 0..400 {
+        for i in 0..200 {
             diagram.add_site(vec2(rng.next_float(), rng.next_float()));
         }
         let mut population = vec![2.0; diagram.sites.len()];
@@ -79,7 +79,7 @@ impl Sim {
 
     pub fn select_cell(&mut self, idx: usize) {
         self.selected_cell = Some(idx);
-        println!("Selected cell {} site {} pop {} centroid {} height {}", idx, self.diagram.sites[idx], self.population[idx], self.centroids[idx], heightmap(&self.centroids[idx], self.h_seed))
+        println!("Selected cell {} site {} pop {} centroid {} height {} verts {:?}", idx, self.diagram.sites[idx], self.population[idx], self.centroids[idx], heightmap(&self.centroids[idx], self.h_seed), self.diagram.site_voronoi_verts(idx))
     }
 
     // 1 year
@@ -99,7 +99,7 @@ impl Sim {
             let col = vec4(civ.h * 360.0, 0.8, 1.0, 1.0).hsv_to_rgb();
             let pop = self.population[i];
             if pop == 0.0 { continue; }
-            put_poly(&mut buf, self.centroids[i], pop.ln() / 200.0, 10, 0.0, col, 0.4);
+            put_poly(&mut buf, self.centroids[i], pop.ln() / 200.0, 10, 0.0, col, 0.2);
         }
 
         if let Some(idx) = self.selected_cell {
@@ -111,6 +111,15 @@ impl Sim {
                 put_line(&mut buf, a, b, 0.001, vec4(1.0, 1.0, 1.0, 1.0), 0.4);
             }
         }
+
+        // // draw triangles
+        // for i in 0..self.diagram.tri_verts.len() {
+        //     let t = self.diagram.tri_verts[i];
+        //     put_line(&mut buf, self.diagram.sites[t[0]], self.diagram.sites[t[1]], 0.002, vec4(1.0, 0.0, 0.0, 1.0), 0.3);
+        //     put_line(&mut buf, self.diagram.sites[t[1]], self.diagram.sites[t[2]], 0.002, vec4(1.0, 0.0, 0.0, 1.0), 0.3);
+        //     put_line(&mut buf, self.diagram.sites[t[2]], self.diagram.sites[t[0]], 0.002, vec4(1.0, 0.0, 0.0, 1.0), 0.3);
+        // }
+
         buf
     }
 
