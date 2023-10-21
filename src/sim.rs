@@ -51,6 +51,11 @@ impl Sim {
         for i in 0..200 {
             diagram.add_site(vec2(rng.next_float(), rng.next_float()));
         }
+        let centroids = diagram.centroids();
+        let mut diagram = Delaunay::new();
+        for p in centroids.iter().skip(4) {
+            diagram.add_site(*p);
+        }
         let mut population = vec![2.0; diagram.sites.len()];
         // but oi nah do a lloyd step ay
         let centroids = diagram.centroids();
