@@ -1,31 +1,18 @@
-misc voronoi shit - spring system - differently sized gaps
-or its funny relaxation then randomly delete
+todo.
+1. Go in XYZRGBA and fix poly fan and then add draw line
+2. add highlight to selected cell and debug selected cell / flipy or not flipy
+3. why now that i added centroids edge ones look fucked / have negative centroids?
+4. add to git and removal of voronoice library stuff
+5. minrng / noise library. goodhash(&mut u32) cheaphash(&mut u32). chec dat vid for the ones it had. test performance, test randomness with image buffer output. and yea gradient noise it.
+6. matrix lib
+7. reusing / freeing vbo vao
 
-
-Questions here about pgm / mesh / shader / vertex buffer abstraction
-and also of engine abstraction
-and of noise/rng packages
-
-TODO: fix wayland glViewport shit
-
-I could totally do this in 3d
-clipping skirts by taking min
-
-render3d
-
-put a water clipping plane
-
-is there some kind of cool nice mesh generation
-
-is it something wrong with voronoi library: do I have to do it myself after all? i think it was yea delauney and circumcircle shit
-
-
-Todo test triangle, test matrix
-01 matrix remap to ndc
-then its like is it the fookin voronoi thats wrong? need to do my custom voronoi shit?? theres improvements too
-
-handling aspect: we could defs generate with a certain aspect then do aspect in proj mat
-would like to fix window resizing but idk if its wayland thing
-maybe updating to latest version of winit etc?
-
-but anyway whats with the missing triangle shit, i should be using my own delauney
+w. resizing etc will wayland allow? new winit demo maybe?
+w+1. non uniform voronoi grids eg random repulsion force value
+w+2. look better: antialias + noise / why didnt i just use worley xd but the neighbour info
+w+3. rivers were cool etc
+w+4. productivity area calculation
+w+5. auto take ref for vector? auto borrow? ok so there is for self method. what about implementing operator overloads for ref Vec2 with Vec2 etc.
+w+6. not quite voronoi - random deletion of cells too, maybe after relax
+w+7. make 3d. i mean hey a cool looking map generation for a game. texture could be cool
+w+8. take to web

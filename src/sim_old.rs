@@ -1,6 +1,7 @@
 use glow_mesh::xyzrgba::*;
-use glow_mesh::xyzrgba_build2d::*;
-use crate::delaunay::Delaunay;
+use glow_mesh::xyzrgba_build2d::put_poly;
+use glow_mesh::xyzrgba_build2d::put_triangle;
+use voronoice::{Voronoi, VoronoiBuilder, Point, BoundingBox};
 use crate::rng::*;
 use crate::heightmap::*;
 use minvect::*;
@@ -32,54 +33,58 @@ impl Culture {
 }
 
 pub struct Sim {
-    pub diagram: Delaunay,
-    pub centroids: Vec<Vec2>,
+    pub diagram: Voronoi,
+    pub elevation: Vec<f32>,
+    pub temperature: Vec<f32>,
     pub population: Vec<f32>,
     pub culture: Vec<Culture>,
+    pub sites: Vec<Vec2>,
     pub seed: u32,
-    pub h_seed: u32,
-    pub selected_cell: Option<usize>,
 }
 
 
 impl Sim {
     pub fn new(seed: u32, a: f32) -> Self {
         let mut rng = Rng::new_seeded(seed);
-        let h_seed = rng.next_u32();
+        let noisemap_seed = rng.next_u32();
 
-        let mut diagram = Delaunay::new();
+        let mut sites: Vec<Vec2> = vec![];
         for i in 0..400 {
-            diagram.add_site(vec2(rng.next_float(), rng.next_float()));
+            let x = rng.next_float() * a;
+            let y = rng.next_float();
+            sites.push(vec2(x, y));
         }
-        let mut population = vec![2.0; diagram.sites.len()];
-        // but oi nah do a lloyd step ay
-        let centroids = diagram.centroids();
+        
+        let bb = BoundingBox::new(Point { x: a as f64 / 2.0, y: 0.5}, a as f64, 1.0);
+        let diagram = VoronoiBuilder::default()
+                        .set_sites(sites.iter().map(|v| Point { x: v.x as f64, y: v.y as f64 }).collect())
+                        .set_bounding_box(bb)
+                        .set_lloyd_relaxation_iterations(1)
+                        .build()
+                        .expect("failed to make voronoi diagram for some reason");
 
-        for i in 0..diagram.sites.len() {
-            if heightmap(&centroids[i], h_seed) < 0.6 {
-                population[i] = 0.0;
+        let elevation: Vec<f32> = sites.iter().map(|s| heightmap(s, noisemap_seed)).collect();
+        let temperature = sites.iter().map(|s| temperature_map(s, noisemap_seed)).collect();
+        let mut population = vec![2.0; sites.len()];
+        for i in 0..sites.len() {
+            if elevation[i] < 0.5 {
+                population[i] = 0.0; // water
             }
         }
         let mut culture = vec![];
-        for i in 0..diagram.sites.len() {
+        for i in 0..sites.len() {
             culture.push(Culture::new(&mut rng));
         }
 
-
         Sim {
             diagram,
+            sites,
+            elevation,
+            temperature,
             population,
             culture,
             seed,
-            h_seed,
-            centroids,
-            selected_cell: None,
         }
-    }
-
-    pub fn select_cell(&mut self, idx: usize) {
-        self.selected_cell = Some(idx);
-        println!("Selected cell {} site {} pop {} centroid {} height {}", idx, self.diagram.sites[idx], self.population[idx], self.centroids[idx], heightmap(&self.centroids[idx], self.h_seed))
     }
 
     // 1 year
@@ -94,32 +99,28 @@ impl Sim {
 
     pub fn civ_geometry(&self) -> Vec<XYZRGBA> {
         let mut buf = vec![];
-        for i in 0..self.diagram.sites.len() {
+        for i in 0..self.sites.len() {
             let civ = &self.culture[i];
             let col = vec4(civ.h * 360.0, 0.8, 1.0, 1.0).hsv_to_rgb();
             let pop = self.population[i];
             if pop == 0.0 { continue; }
-            put_poly(&mut buf, self.centroids[i], pop.ln() / 200.0, 10, 0.0, col, 0.4);
-        }
-
-        if let Some(idx) = self.selected_cell {
-            let mut verts = self.diagram.site_voronoi_verts(idx);
-            verts.push(verts[0]);
-            for i in 1..verts.len() {
-                let a = verts[i-1];
-                let b = verts[i];
-                put_line(&mut buf, a, b, 0.001, vec4(1.0, 1.0, 1.0, 1.0), 0.4);
-            }
+            put_poly(&mut buf, self.sites[i], pop.ln() / 200.0, 10, 0.0, col, 0.4);
         }
         buf
     }
 
     pub fn terrain_geometry(&self) -> Vec<XYZRGBA> {
         let mut buf = vec![];
-        for i in 0..self.diagram.sites.len() {
-            let bg_colour = col(&self.centroids[i], self.h_seed);
-            let c = self.diagram.sites[i];
-            let v = self.diagram.site_voronoi_verts(i);
+        for i in 0..self.sites.len() {
+            let bg_colour = col(&self.sites[i], self.seed);
+
+            // then get the triangles from the voronoi diagram and draw them
+            let cell = self.diagram.cell(i);
+            let p = cell.site_position();
+            let p = vec2(p.x as f32, p.y as f32);
+            let c = self.sites[i];
+            // let c = p;
+            let v: Vec<Vec2> = cell.iter_vertices().map(|p| vec2(p.x as f32, p.y as f32)).collect();
             for i in 1..v.len() {
                 let a = v[i - 1];
                 let b = v[i];
@@ -128,6 +129,9 @@ impl Sim {
             let a = v[v.len() - 1];
             let b = v[0];
             put_triangle(&mut buf, a, b, c, bg_colour, 0.5);
+
+            put_poly(&mut buf, c, 0.01, 10, 0.0, vec4(0.0, 0.0, 0.0, 1.0), 0.4);
+
         }
         buf
     }

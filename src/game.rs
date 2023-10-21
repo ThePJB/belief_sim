@@ -5,6 +5,7 @@ use glow_mesh::xyzrgba::*;
 use glow_mesh::xyzrgba_build2d::*;
 use glutin::event::{Event, WindowEvent};
 use winit::event::ElementState;
+use winit::event::MouseButton;
 use winit::event::VirtualKeyCode;
 use crate::rng;
 use crate::rng::Rng;
@@ -20,12 +21,14 @@ pub struct Game {
 
     prog: ProgramXYZRGBA,
     h: HandleXYZRGBA,
+
+    mouse_pos: Vec2,
 }
 
 impl Game {
     pub fn new(event_loop: &glutin::event_loop::EventLoop<()>) -> Self {
-        let xres = 512;
-        let yres = 512;
+        let xres = 900;
+        let yres = 900;
     
         unsafe {
             let window_builder = glutin::window::WindowBuilder::new()
@@ -46,8 +49,7 @@ impl Game {
     
             let prog = ProgramXYZRGBA::default(&gl);
             let sim = Sim::new(69, 1.0);
-            let mut buf = sim.render();
-            put_quad(&mut buf, vec2(1.0, 1.0), vec2(1.0, 0.0), vec2(0.0, 0.0), vec2(0.0, 1.0), vec4(0.0, 0.0, 1.0, 1.0), 0.6);
+            let buf = sim.terrain_geometry();
             let h = upload_xyzrgba_mesh(&buf, &gl);
             prog.bind(&gl);
 
@@ -59,6 +61,7 @@ impl Game {
                 sim: Sim::new(69, 1.0),
                 prog,
                 h,
+                mouse_pos: vec2(0.0, 0.0),
             }
         }
     }
@@ -81,11 +84,24 @@ impl Game {
                         WindowEvent::KeyboardInput { input, .. } => {
                             if let Some(vkk) = input.virtual_keycode {
                                 match vkk {
-                                    VirtualKeyCode::R if input.state == ElementState::Released => {self.sim = Sim::new(random_seed(), 1.0)},
+                                    VirtualKeyCode::R if input.state == ElementState::Released => {
+                                        self.sim = Sim::new(random_seed(), 1.0);
+                                        let buf = self.sim.terrain_geometry();
+                                        self.h = upload_xyzrgba_mesh(&buf, &self.gl);
+                                    },
                                     _ => {},
                                 }
                             }
                         },
+                        WindowEvent::CursorMoved { device_id, position, modifiers } => {
+                            self.mouse_pos = vec2(position.x as f32 / self.xres as f32, position.y as f32 / self.yres as f32);
+                        },
+                        WindowEvent::MouseInput { device_id, state, button, modifiers } => {
+                            if state == ElementState::Released && button == MouseButton::Left {
+                                let idx = self.sim.diagram.nearest_site_idx(self.mouse_pos);
+                                self.sim.select_cell(idx)
+                            }
+                        }
                         _ => {},
                     }
                 },
@@ -95,9 +111,16 @@ impl Game {
                     let t = mat4_translation(-0.5, -0.5);
                     let s = mat4_scaling(2.0);
                     let p = mat4_multiply(&s, &t);
+                    let flipy = [1.0f32, 0., 0., 0., 0., -1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.,];
+                    let p = mat4_multiply(&flipy, &p);
                     // let p = [1.0f32, 0., 0., 0., 0., 1., 0., 0., 0., 0., 1., 0., 0., 0., 0., 1.,];
                     self.prog.set_proj(&p, &self.gl);
                     self.h.render(&self.gl);
+
+                    let buf = self.sim.civ_geometry();
+                    let h = upload_xyzrgba_mesh(&buf, &self.gl);
+                    h.render(&self.gl);
+
                     self.window.swap_buffers().unwrap();
                 },
                 _ => {},

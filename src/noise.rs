@@ -1,5 +1,6 @@
-use std::f32::consts::PI;
+use std::f32::{consts::PI, INFINITY, NEG_INFINITY};
 use minvect::*;
+use crate::rng::*;
 
 pub fn hash(mut state: u32) -> u32 {
     state = (state ^ 2747636419).wrapping_mul(2654435769);
@@ -24,6 +25,11 @@ pub fn fade(t: f32) -> f32 {
 // can you influence the vectors and stuff in octaves?
 // possibility of hyper optimizations
 // eg u64 hash, or optimization of rng bits. dont need as many, like if we were selcting from 8directions. can also do shitty 0-1 0-1 and normalize unit vectors. or not bother
+// bra what the output range: 0..1?
+// where the exp at
+// ok for whatever reason this shit is between -.5 and .5
+// ok now its 0..1 ish
+// yea hyper opt would be using LCG. rng lib. fast hash slow hash. this. lcg
 pub fn noise_grad(p: &Vec2, seed: u32) -> f32 {
     // grid corners get a random vector
     // blend the vectors
@@ -66,5 +72,24 @@ pub fn noise_grad(p: &Vec2, seed: u32) -> f32 {
     let ly1 = lerp(s10, s11, ty);
     let l = lerp(ly0, ly1, tx);
 
-    return l;
+    return (l + 0.5).max(0.0).min(1.0);
+}
+
+pub fn noise_exp(p: &Vec2, seed: u32) -> f32 {
+    -noise_grad(p, seed).ln()
+}
+
+#[test]
+fn test_noise() {
+    let mut min = INFINITY;
+    let mut max = NEG_INFINITY;
+    let mut rng = Rng::new_seeded(69);
+    for i in 0..1000000 {
+        let p = vec2(rng.next_float(), rng.next_float());
+        let p = p * 20.0;
+        let h = noise_grad(&p, rng.next_u32());
+        min = min.min(h);
+        max = max.max(h);
+    }
+    dbg!(min, max);
 }
