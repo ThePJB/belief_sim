@@ -2,21 +2,26 @@ use glow::HasContext;
 use minvect::*;
 extern crate glow_mesh;
 use glow_mesh::xyzrgba::*;
-use glow_mesh::xyzrgba_build2d::*;
 use glutin::event::{Event, WindowEvent};
 use winit::event::ElementState;
 use winit::event::MouseButton;
 use winit::event::VirtualKeyCode;
-use crate::rng;
-use crate::rng::Rng;
 use crate::rng::random_seed;
 use crate::sim::*;
 use crate::matrix::*;
+use std::time::Instant;
+use std::time::Duration;
+
 pub struct Game {
     xres: i32,
     yres: i32,
     window: glutin::ContextWrapper<glutin::PossiblyCurrent, glutin::window::Window>,
     gl: glow::Context,
+
+    last_frame: Instant,
+    t_since_update: f32,
+    pause: bool,
+
     sim: Sim,
 
     prog: ProgramXYZRGBA,
@@ -62,6 +67,9 @@ impl Game {
                 prog,
                 h,
                 mouse_pos: vec2(0.0, 0.0),
+                pause: false,
+                t_since_update: 0.0,
+                last_frame: Instant::now(),
             }
         }
     }
@@ -106,6 +114,17 @@ impl Game {
                     }
                 },
                 Event::MainEventsCleared => {
+                    let tnow = Instant::now();
+                    let t_since_last = tnow.duration_since(self.last_frame);
+                    self.t_since_update += t_since_last.as_secs_f32();
+                    self.last_frame = tnow;
+
+                    let t_step = 0.1;
+                    if self.t_since_update > t_step {
+                        self.sim.step();
+                        self.t_since_update -= t_step;
+                    }
+
                     self.gl.clear_color(0.0, 0.0, 0.0, 1.0);
                     self.gl.clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT); 
                     let t = mat4_translation(-0.5, -0.5);

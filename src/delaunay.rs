@@ -251,6 +251,13 @@ impl Delaunay {
         (0..(self.tri_verts.len())).filter(|j| self.tri_verts[*j][0] == i || self.tri_verts[*j][1] == i || self.tri_verts[*j][2] == i).collect()
     }
 
+    pub fn site_neighbours_slow(&self, i: usize) -> Vec<usize> {
+        let mut neighbours: HashSet<usize> = self.site_triangles_slow(i).iter().map(|t| self.tri_verts[*t]).flatten().collect();
+        neighbours.remove(&i);
+        neighbours.into_iter().collect()
+    }
+
+
     pub fn site_voronoi_verts(&self, i: usize) -> Vec<Vec2> {
         let site_triangles = self.site_triangles_slow(i);
 
